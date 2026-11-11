@@ -4,26 +4,30 @@
   const questions = data.rows.map(([id,subject,topic,text,answer,explanation,memory,source,ref]) => ({id,subject,topic,text,answer,explanation,memory,source,ref}));
   const byId = new Map(questions.map(q=>[q.id,q]));
   const names = ['외환관리실무','외국환거래실무','환리스크관리'];
-  const counts = [50,30,20];
+  const coreIds = data.sampleGroups.flatMap(g=>g.ids);
+  const coreSet = new Set(coreIds);
+  const coreQuestions = coreIds.map(id=>byId.get(id));
+  const supplementIds = questions.filter(q=>!coreSet.has(q.id)).map(q=>q.id);
+  const counts = names.map((_,s)=>coreQuestions.filter(q=>q.subject===s).length);
   const key = 'cfes1-ox-study-v1';
   const app = document.getElementById('app');
   const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const range = (a,b) => questions.filter(q=>q.id>=a&&q.id<=b).map(q=>q.id);
+  const sampleRange = (a,b) => data.sampleGroups.filter(g=>g.number>=a&&g.number<=b).flatMap(g=>g.ids);
   const dayParts = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
   const part = type => dayParts.find(p=>p.type===type).value;
   const today = `${part('year')}-${part('month')}-${part('day')}`;
   const daysLeft = Math.round((Date.parse(data.examDate+'T00:00:00+09:00')-Date.parse(today+'T00:00:00+09:00'))/86400000);
   document.getElementById('exam-badge').textContent = daysLeft>0?`D-${daysLeft} · 11.21` : daysLeft===0?'오늘 시험':'11.21 시험 대비';
   const plan = [
-    {date:'2026-11-11',title:'거주자·기본개념·지급',ids:range(1,20)},
-    {date:'2026-11-12',title:'제3자 지급·상계·차입',ids:range(21,35)},
-    {date:'2026-11-13',title:'해외투자·부동산',ids:range(36,50)},
-    {date:'2026-11-14',title:'환거래·환율·계산',ids:range(51,65)},
-    {date:'2026-11-15',title:'포지션·자금·수표',ids:range(66,80)},
-    {date:'2026-11-16',title:'환위험·헤지·파생상품',ids:range(81,100)},
-    {date:'2026-11-17',title:'법규 50문항 다시 풀기',ids:range(1,50)},
-    {date:'2026-11-18',title:'거래·환리스크 50문항 복습',ids:range(51,100)},
-    {date:'2026-11-19',title:'전 과목 100문항 섞어 풀기',ids:range(1,100),shuffle:true},
+    {date:'2026-11-11',title:'샘플 1~3 · 지급·차입·스톡옵션',ids:sampleRange(1,3)},
+    {date:'2026-11-12',title:'샘플 4~5 · 부동산·직접투자',ids:sampleRange(4,5)},
+    {date:'2026-11-13',title:'샘플 6~7 · 환거래·포지션',ids:sampleRange(6,7)},
+    {date:'2026-11-14',title:'샘플 8~10 · 자금·수표·미달환',ids:sampleRange(8,10)},
+    {date:'2026-11-15',title:'샘플 11~12 · 환율·환위험',ids:sampleRange(11,12)},
+    {date:'2026-11-16',title:'샘플 13~15 · 선물·통화스왑',ids:sampleRange(13,15)},
+    {date:'2026-11-17',title:'보충 · 거주성·지급·상계 등',ids:supplementIds.filter(id=>byId.get(id).subject===0)},
+    {date:'2026-11-18',title:'보충 · 환율계산·선물환·옵션',ids:supplementIds.filter(id=>byId.get(id).subject!==0)},
+    {date:'2026-11-19',title:'핵심 혼합 30문항 · 15/9/6 배분',ids:[],mixed:true},
     {date:'2026-11-20',title:'오답·헷갈린 문제 최종 복습',review:true}
   ];
   let state = {version:1,records:{},session:null};
@@ -35,7 +39,7 @@
     return out;
   }
   function validSession(s){
-    if(!s||!Array.isArray(s.ids)||s.ids.length<1||s.ids.length>100||!s.ids.every(id=>byId.has(id))) return null;
+    if(!s||!Array.isArray(s.ids)||s.ids.length<1||s.ids.length>questions.length||!s.ids.every(id=>byId.has(id))) return null;
     const ids=[...new Set(s.ids)];const answers={};
     for(const id of ids) if(typeof s.answers?.[id]==='boolean')answers[id]=s.answers[id];
     return {ids,index:Math.max(0,Math.min(Number.isInteger(s.index)?s.index:0,ids.length-1)),answers,title:typeof s.title==='string'?s.title.slice(0,100):'학습',done:s.done===true};
@@ -47,30 +51,33 @@
   function shuffled(ids){const a=[...ids];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function setView(next,scroll=true){view=next;document.querySelectorAll('[data-view]').forEach(b=>{if(b.dataset.view===next)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});render();if(scroll)window.scrollTo({top:0,behavior:'instant'});}
   function start(ids,title,shuffle=false){if(!ids.length){setView('review');return;}state.session={ids:shuffle?shuffled(ids):[...ids],index:0,answers:{},title,done:false};save();setView('quiz');}
-  function startDay(index){const p=plan[index];const ids=p.review?reviewIds():p.ids;start(ids,p.title,p.shuffle||false);}
+  function mixedIds(){return [15,9,6].flatMap((n,s)=>shuffled(coreQuestions.filter(q=>q.subject===s).map(q=>q.id)).slice(0,n));}
+  function startDay(index){const p=plan[index];const ids=p.review?reviewIds():p.mixed?mixedIds():p.ids;start(ids,p.title,p.mixed||false);}
   function todayIndex(){const i=plan.findIndex(p=>p.date===today);return i<0?(today<plan[0].date?0:9):i;}
   function render(){if(view==='quiz'){if(!state.session){setView('home');return;}state.session.done?renderResult():renderQuiz();}else if(view==='review')renderReview();else if(view==='summary')renderSummary();else if(view==='about')renderAbout();else renderHome();}
   function renderHome(){
-    const records=Object.values(state.records),done=records.length,correct=records.filter(r=>r.correct).length,wrong=reviewIds().length;
-    const pi=todayIndex(),p=plan[pi],n=p.review?wrong:p.ids.length;
+    const records=coreIds.map(id=>state.records[id]).filter(Boolean),done=records.length,correct=records.filter(r=>r.correct).length,wrong=reviewIds().length;
+    const pi=todayIndex(),p=plan[pi],n=p.review?wrong:p.mixed?30:p.ids.length;
     const active=state.session&&!state.session.done;
     app.innerHTML=`<div class="stack">
-      <section class="hero"><div class="eyebrow">ONE HOUR, ONE STEP</div><h1>매일 한 시간,<br>외환의 핵심을 내 것으로.</h1><p>O/X로 기억을 꺼내고, 짧은 해설로 빈틈을 채우세요.<br>외환전문역 1종 · 과목별 100문항</p><button class="primary full" data-action="today">${p.review?'마지막 오답 복습':`오늘의 ${n}문제 시작`} <span aria-hidden="true">→</span></button><p class="small">${esc(p.title)} · 하루 60분 학습</p></section>
+      <section class="hero"><div class="eyebrow">OFFICIAL SAMPLE FIRST</div><h1>공식 샘플부터,<br>핵심 ${coreIds.length}문항.</h1><p>공식 샘플 15문항의 선지 쟁점과 연계 응용을 O/X로.<br>하루 한 시간, 틀린 문장을 설명할 수 있을 때까지.</p><button class="primary full" data-action="today">${p.review?'마지막 오답 복습':`오늘의 ${n}문제 시작`} <span aria-hidden="true">→</span></button><p class="small">${esc(p.title)}</p></section>
       ${active?`<section class="resume"><p><b>풀던 문제 이어서</b>${esc(state.session.title)} · ${state.session.index+1}/${state.session.ids.length}</p><button class="primary" data-action="resume">이어서 풀기</button></section>`:''}
-      <section class="stats" aria-label="누적 학습 현황"><div class="stat"><b>${done}<small> / 100</small></b><span>풀어본 문제</span></div><div class="stat"><b>${correct}</b><span>최근 정답</span></div><div class="stat"><b>${wrong}</b><span>복습할 문제</span></div></section>
-      <section><div class="section-top"><h2>과목별로 차근차근</h2><span class="small muted">50 : 30 : 20</span></div><div class="subjects">${names.map((name,s)=>{const nd=questions.filter(q=>q.subject===s&&state.records[q.id]).length;return `<article class="subject"><div class="row"><div><div class="number">SUBJECT 0${s+1} · ${counts[s]}문항</div><h3>${name}</h3><p class="mini">${s===0?'거주자 · 신고 · 투자':s===1?'환거래 · 환율 · 자금':'헤지 · 선물 · 옵션'}</p></div><button class="secondary" data-action="subject" data-subject="${s}">문제 풀기 →</button></div><div class="bar" aria-label="${name} ${nd}문항 학습"><span style="width:${nd/counts[s]*100}%"></span></div><p class="mini">${nd} / ${counts[s]}문항 학습</p></article>`}).join('')}</div></section>
-      <details class="plan"><summary>11월 21일까지 · 하루 1시간 학습표</summary><div class="plan-list">${plan.map((d,i)=>`<div class="plan-day ${d.date===today?'today':''}"><time datetime="${d.date}">${d.date.slice(5).replace('-','/')}</time><span>${d.title}<br><small class="muted">${d.review?'오답·표시한 문항':`${d.ids.length}문항`}${d.date===today?' · 오늘':''}</small></span><button data-action="day" data-index="${i}" aria-label="${d.date} 학습 시작">→</button></div>`).join('')}<p class="routine">10분 어제 오답 → 20분 풀이 → 20분 해설 → 10분 다시 설명하기</p></div></details>
-      <p class="note">공식 샘플 주제와 법규를 바탕으로 새로 만든 학습문제입니다. 실제 회차별 기출 원문은 아닙니다. 법규 확인: 2026.11.11. 시험 적용 교재·정오표가 우선입니다.</p>
+      <section class="stats" aria-label="핵심 학습 현황"><div class="stat"><b>${done}<small> / ${coreIds.length}</small></b><span>풀어본 핵심</span></div><div class="stat"><b>${correct}</b><span>핵심 최근 정답</span></div><div class="stat"><b>${wrong}</b><span>전체 복습할 문제</span></div></section>
+      <section><div class="section-top"><h2>과목별 핵심 먼저</h2><span class="small muted">샘플 연계 ${coreIds.length}문항</span></div><div class="subjects">${names.map((name,s)=>{const nd=coreQuestions.filter(q=>q.subject===s&&state.records[q.id]).length;return `<article class="subject"><div class="row"><div><div class="number">SUBJECT 0${s+1} · 핵심 ${counts[s]}</div><h3>${name}</h3><p class="mini">${s===0?'지급 · 차입 · 해외투자':s===1?'환거래 · 포지션 · 미달환':'환위험 · 선물 · 통화스왑'}</p></div><button class="secondary" data-action="subject" data-subject="${s}" aria-label="${name} 핵심 ${counts[s]}문항 풀기">핵심 풀기 →</button></div><div class="bar" aria-label="${name} ${nd}문항 학습"><span style="width:${nd/counts[s]*100}%"></span></div><p class="mini">${nd} / ${counts[s]}문항 학습</p></article>`}).join('')}</div><div class="study-shortcuts"><button class="secondary" data-action="core">핵심 ${coreIds.length}문항 전체</button><button class="secondary" data-action="new">이번에 보강한 20문항</button></div></section>
+      <details class="plan"><summary>공식 샘플 15문항과 어떻게 연결되나요?</summary><div class="plan-list"><p class="note provenance-note">회차별 기출 원문으로 확인한 자료는 없습니다. 아래는 한국금융연수원 공식 샘플의 쟁점에 연결한 자체 O/X입니다. 선지 쟁점·현행법규 반영·연계 응용을 문항마다 구별했습니다.</p>${data.sampleGroups.map(g=>`<div class="sample-row"><span><b>샘플 ${g.number}번</b>${esc(g.title)}<small>${g.ids.length}문항</small></span><button class="text-button" data-action="sample" data-number="${g.number}" aria-label="공식 샘플 ${g.number}번 연계 ${g.ids.length}문항 풀기">풀기 →</button></div>`).join('')}<a class="source-link" href="${esc(data.sources.exam.url)}" target="_blank" rel="noopener noreferrer">한국금융연수원 시험안내 → 샘플문제 원본 ↗</a></div></details>
+      <details class="plan"><summary>기본개념 보충 ${supplementIds.length}문항 · 선택 학습</summary><div class="plan-list"><p class="note provenance-note">기존 세트에서 남겨 둔 기본개념 문제입니다. 핵심을 먼저 풀고 거주성·상계·환율 계산·옵션 등 부족한 부분을 보충하세요. 전체 보유 문항은 ${questions.length}개입니다.</p><div class="study-shortcuts">${names.map((name,s)=>{const n=supplementIds.filter(id=>byId.get(id).subject===s).length;return `<button class="secondary" data-action="supplement" data-subject="${s}">${name} ${n}문항</button>`}).join('')}<button class="text-button" data-action="all">전체 ${questions.length}문항 풀기</button></div><p class="note">기존 답안·오답·★ 표시와 이어풀기는 유지됩니다.</p></div></details>
+      <details class="plan"><summary>11월 21일까지 · 하루 1시간 학습표</summary><div class="plan-list">${plan.map((d,i)=>`<div class="plan-day ${d.date===today?'today':''}"><time datetime="${d.date}">${d.date.slice(5).replace('-','/')}</time><span>${d.title}<br><small class="muted">${d.review?'오답·표시한 문항':`${d.mixed?30:d.ids.length}문항`}${d.date===today?' · 오늘':''}</small></span><button data-action="day" data-index="${i}" aria-label="${d.date} 학습 시작">→</button></div>`).join('')}<p class="routine">10분 어제 오답 → 15분 풀이 → 25분 해설 → 10분 틀린 문장 고쳐 말하기</p></div></details>
+      <p class="note">핵심 ${coreIds.length} + 보충 ${supplementIds.length} = 전체 ${questions.length}문항. 핵심은 공식 샘플과 연결된 학습 순서이며 출제빈도 순위가 아닙니다. 법규 확인: 2026.11.11. 시험 적용 교재·정오표가 우선입니다.</p>
     </div>`;
   }
   function renderQuiz(){
     const s=state.session,q=byId.get(s.ids[s.index]),selected=s.answers[q.id],answered=typeof selected==='boolean',r=state.records[q.id];
-    const ok=selected===q.answer,src=data.sources[q.source],complete=Object.keys(s.answers).length;
+    const ok=selected===q.answer,src=data.sources[q.source],complete=Object.keys(s.answers).length,link=data.sampleLinks[q.id];
     app.innerHTML=`<div class="question-top row"><button class="text-button" data-action="home">← 학습 홈</button><span class="quiz-progress">${s.index+1} / ${s.ids.length}</span></div><div class="bar" role="progressbar" aria-label="이번 풀이 진행률" aria-valuemin="0" aria-valuemax="${s.ids.length}" aria-valuenow="${complete}"><span style="width:${complete/s.ids.length*100}%"></span></div>
       <div class="question-meta"><span class="tag">${names[q.subject]}</span><span class="tag">${esc(q.topic)}</span><span class="small muted">${esc(s.title)}</span></div>
-      <article class="question-card"><div class="question-id">Q${String(q.id).padStart(3,'0')} · ${q.ref.includes('공식 샘플')?'공식 샘플 주제 확장':'자체 학습문항'}</div><h1 id="question-text">${esc(q.text)}</h1>
+      <article class="question-card"><div class="question-id">Q${String(q.id).padStart(3,'0')} · ${link?`샘플 ${link.number}번 연계 · ${link.kind}`:'기본개념 보충'}</div><h1 id="question-text">${esc(q.text)}</h1>
       <div class="answers" role="group" aria-labelledby="question-text">${[true,false].map(a=>`<button class="answer-button ${answered&&selected===a?'selected':''} ${answered&&q.answer===a?'correct-choice':''}" data-action="answer" data-answer="${a}" aria-label="${a?'O, 맞다':'X, 틀리다'}" ${answered?'disabled':''}>${a?'O':'X'}<small>${a?'맞다':'틀리다'}</small></button>`).join('')}</div>
-      <section class="feedback" id="feedback" aria-live="polite" ${answered?'':'hidden'}>${answered?`<p class="verdict ${ok?'good':'bad'}">${ok?'정답이에요':'다시 기억해 볼까요?'} <span>· 정답 ${q.answer?'O':'X'}</span></p><p class="explanation">${esc(q.explanation)}</p><div class="memory"><small>이 한 줄은 꼭</small>${esc(q.memory)}</div><a class="source-link" href="${esc(src.url)}" target="_blank" rel="noopener noreferrer">근거: ${esc(q.ref)} ↗</a>`:''}</section>
+      <section class="feedback" id="feedback" aria-live="polite" ${answered?'':'hidden'}>${answered?`<p class="verdict ${ok?'good':'bad'}">${ok?'정답이에요':'다시 기억해 볼까요?'} <span>· 정답 ${q.answer?'O':'X'}</span></p><p class="explanation">${esc(q.explanation)}</p><div class="memory"><small>이 한 줄은 꼭</small>${esc(q.memory)}</div><a class="source-link" href="${esc(src.url)}" target="_blank" rel="noopener noreferrer">근거: ${esc(q.ref)} ↗</a>${link?`<p class="note source-note">공식 샘플 ${link.number}번 연계 · ${link.kind}. O/X 문장과 해설은 새로 작성했습니다.</p>`:''}`:''}</section>
       </article><div class="quiz-actions"><button class="text-button" data-action="prev" ${s.index===0?'disabled':''}>← 이전</button>${answered?`<button class="flag" data-action="flag" aria-pressed="${r?.flag===true}">${r?.flag?'★ 복습에 담음':'☆ 맞혔어도 헷갈려요'}</button><button class="primary" data-action="next">${s.index===s.ids.length-1?'결과 보기':'다음 문제'} →</button>`:'<span class="small muted">답을 고르면 해설이 보여요</span>'}</div><p class="quiz-footer">${answered?'틀린 문제는 오답에 자동 저장됩니다.':'천천히 읽고, 틀린 문장을 바르게 고쳐 보세요.'}</p>`;
   }
   function answer(value){const s=state.session;if(!s||s.done)return;const id=s.ids[s.index];if(typeof s.answers[id]==='boolean')return;const q=byId.get(id),old=state.records[id];s.answers[id]=value;state.records[id]={answer:value,correct:value===q.answer,flag:old?.flag===true,tries:(old?.tries||0)+1,at:new Date().toISOString()};save();renderQuiz();}
@@ -85,8 +92,8 @@
       ['05 · 헤지 방향 4개',['받을 달러 → 선물환 매도 또는 달러 풋옵션 매수','지급할 달러 → 선물환 매입 또는 달러 콜옵션 매수','달러 매입초과(Long) → 환율 상승 유리 / 매도초과(Short) → 환율 상승 불리','통화스왑: 달러 변동부채는 달러 변동 수취·원화 고정 지급. 달러 변동자산은 그 반대. 원금·만기 일치도 확인.']],
       ['06 · 계산은 단위부터',['원화금액 = 달러금액 × 원/달러 환율','원/100엔 = (원/달러 ÷ 엔/달러) × 100','달러선물 1계약 = 10,000달러. 1틱 0.1원 × 10,000 = 1,000원.','만기 콜 매수 순익 = max(S-K,0) - 프리미엄. 풋 매수 순익 = max(K-S,0) - 프리미엄. S=만기 현물환율, K=행사가격.','단순 금리평가: F = S × (1+원화금리×기간)/(1+달러금리×기간). 기간은 연 단위, 금리는 소수. 실제 시장가격과 차이가 날 수 있음.']]
     ];app.innerHTML=`<div class="page-intro"><div class="eyebrow muted">LAST MINUTE NOTES</div><h1>시험 전, 이 여섯 가지.</h1><p>암기문장을 읽고 이유를 소리 내어 설명해 보세요.<br>법규는 문제의 조건과 예외를 함께 확인하세요.</p></div>${blocks.map(([t,items])=>`<section class="summary-block"><h3>${t}</h3><ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></section>`).join('')}<p class="note" style="margin-top:20px">2026.11.11. 확인. 최신 시행 규정과 실제 시험 적용 교재의 기준일이 다를 수 있으므로 한국금융연수원 해당 회차 공지·교재 정오표를 우선하세요. 요약은 개별 문제의 조건을 대체하지 않습니다.</p>`;}
-  function renderAbout(){app.innerHTML=`<div class="page-intro"><div class="eyebrow muted">ABOUT THIS STUDY SET</div><h1>자료의 기준을 분명하게.</h1><p>출처와 학습기록 안내</p></div><div class="stack"><section class="info-card"><h2>문제의 성격</h2><p>한국금융연수원의 공개 샘플 15문항에서 확인한 주제를 참고하고, 현행 법규와 기본원리를 바탕으로 새로 작성한 O/X 100문항입니다. <strong>실제 회차별 기출 원문이나 공식 정답집이 아닙니다.</strong></p><p>샘플 주제를 확장한 문제는 해당 번호를 해설의 근거에 표시했습니다. 출제빈도를 분석한 자료는 아니며 전 범위를 빠짐없이 대체하는 교재도 아닙니다.</p><p>실제 시험은 객관식 4지선다, 120분입니다. 배점은 외환관리실무 50점, 외국환거래실무 30점, 환리스크관리 20점. 과목별 40% 이상과 총점 60점 이상을 모두 충족해야 합니다. 예: 35/50 + 21/30 + 14/20 = 총점 70점.</p></section>
-      <section class="info-card"><h2>법규 기준일 · 2026.11.11.</h2><p>외국환거래규정은 2026.11.2. 시행본을 확인했습니다. 공식 구샘플의 외화차입 3천만 달러, 부동산 정기 보유보고 문구 등은 현행 조문과 구별하여 설명했습니다.</p><p>이 자료의 현행 법규 기준이 시험 적용 기준일과 같다고 확인된 것은 아닙니다. 해당 회차 공지와 시험용 교재·정오표의 적용기준을 우선하세요. 일반적인 원칙을 묻는 문항도 적힌 예외·조건을 함께 읽어 주세요.</p><p>계산문제의 환율·금리·프리미엄은 학습용 가정이며 실제 시세가 아닙니다.</p></section>
+  function renderAbout(){app.innerHTML=`<div class="page-intro"><div class="eyebrow muted">ABOUT THIS STUDY SET</div><h1>자료의 기준을 분명하게.</h1><p>출처와 학습기록 안내</p></div><div class="stack"><section class="info-card"><h2>문제의 성격</h2><p>전체 ${questions.length}문항 중 공식 샘플 연계 핵심 ${coreIds.length}문항, 기본개념 보충 ${supplementIds.length}문항으로 구성했습니다. 기존 100문항에서 핵심 47개를 선별하고, 샘플의 빠진 쟁점과 적용 사례 20개를 새로 보강했습니다. <strong>실제 회차별 기출 원문이나 공식 정답집이 아닙니다.</strong></p><p>확보한 공식 자료는 한국금융연수원 공개 샘플 15문항이며, 회차별 실제 기출 원문으로 검증한 자료는 없습니다. 따라서 ‘기출 67개’가 아니라 ‘공식 샘플 연계 O/X 67개’입니다. 문항마다 샘플 번호와 선지 쟁점·현행법규 반영·연계 응용 중 해당 성격을 표시했습니다. 출제빈도를 분석한 자료나 전 범위를 대체하는 교재는 아닙니다.</p><p>실제 시험은 객관식 4지선다, 120분입니다. 배점은 외환관리실무 50점, 외국환거래실무 30점, 환리스크관리 20점. 과목별 40% 이상과 총점 60점 이상을 모두 충족해야 합니다. 예: 35/50 + 21/30 + 14/20 = 총점 70점.</p></section>
+      <section class="info-card"><h2>법규 기준일 · 2026.11.11.</h2><p>외국환거래규정은 2026.11.2. 시행본을 확인했습니다. 공식 구샘플의 외화차입 3천만 달러, 부동산 정기 보유보고, 비거주자 단기대출의 신고기관 등은 현행 조문과 구별하여 설명했습니다. 원샘플의 과거 수치를 현행 정답으로 그대로 옮기지 않았습니다.</p><p>이 자료의 현행 법규 기준이 시험 적용 기준일과 같다고 확인된 것은 아닙니다. 해당 회차 공지와 시험용 교재·정오표의 적용기준을 우선하세요. 일반적인 원칙을 묻는 문항도 적힌 예외·조건을 함께 읽어 주세요.</p><p>계산문제의 환율·금리·프리미엄은 학습용 가정이며 실제 시세가 아닙니다.</p></section>
       <section class="info-card"><h2>휴대폰에서 이어서 공부하기</h2><p>학습기록은 이 주소를 연 <strong>현재 브라우저에만</strong> 저장됩니다. 같은 휴대폰에서도 다른 브라우저를 쓰거나 사이트 데이터를 지우면 기록이 이어지지 않습니다. 서버로 답안을 보내지 않습니다.</p><p>아이폰 Safari: 공유 → 홈 화면에 추가.<br>안드로이드 Chrome: 메뉴 → 홈 화면에 추가 또는 앱 설치.<br>처음 한 번 온라인으로 연 뒤에는 캐시가 준비된 경우 오프라인에서도 사용할 수 있습니다.</p><div class="backup-row"><button class="secondary" data-action="export">학습기록 백업</button><button class="secondary" data-action="import">백업 불러오기</button><input type="file" id="backup-file" accept="application/json,.json" hidden></div><p id="backup-status" class="backup-status" aria-live="polite"></p></section>
       <section class="info-card"><h2>확인한 공식·1차 자료</h2><ul class="source-list">${Object.values(data.sources).map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.name)} ↗</a></li>`).join('')}</ul><p class="note">공식 샘플 PDF는 한국금융연수원 시험안내의 ‘샘플문제 다운로드’에서 확인할 수 있습니다. 원본 PDF는 이 사이트에 재게시하지 않았습니다.</p></section></div>`;}
   document.querySelector('.bottom-nav').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view);});
@@ -97,7 +104,12 @@
     if(action==='home')setView('home');
     else if(action==='today')startDay(todayIndex());
     else if(action==='day')startDay(Number(b.dataset.index));
-    else if(action==='subject'){const subject=Number(b.dataset.subject);start(questions.filter(q=>q.subject===subject).map(q=>q.id),names[subject]);}
+    else if(action==='subject'){const subject=Number(b.dataset.subject);start(coreQuestions.filter(q=>q.subject===subject).map(q=>q.id),names[subject]+' · 샘플 연계 핵심');}
+    else if(action==='core')start(coreIds,'공식 샘플 연계 핵심 '+coreIds.length+'문항');
+    else if(action==='new')start(questions.filter(q=>q.id>100).map(q=>q.id),'이번에 보강한 20문항');
+    else if(action==='sample'){const g=data.sampleGroups.find(g=>g.number===Number(b.dataset.number));if(g)start(g.ids,'샘플 '+g.number+' · '+g.title);}
+    else if(action==='supplement'){const subject=Number(b.dataset.subject);start(supplementIds.filter(id=>byId.get(id).subject===subject),names[subject]+' · 기본개념 보충');}
+    else if(action==='all')start([...coreIds,...supplementIds],'핵심부터 전체 '+questions.length+'문항');
     else if(action==='resume')setView('quiz');
     else if(action==='answer')answer(b.dataset.answer==='true');
     else if(action==='prev'){if(state.session.index>0){state.session.index--;save();setView('quiz');}}

@@ -5,3 +5,5 @@
 @media(max-width:360px){.site-header{padding:18px 16px 12px}main{padding:8px 16px 105px}.brand{font-size:15px}.exam-badge{font-size:11px;padding:5px 9px}.hero{padding:23px}.question-card{padding:19px}.quiz-actions{flex-wrap:wrap}.quiz-actions .primary{flex:1}.plan-day{grid-template-columns:55px 1fr auto}.subject{padding:17px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 @media print{.bottom-nav,.site-header,button{display:none!important}main{max-width:none;padding:0}.hero{background:none;color:#000}.question-card,.info-card{border:0;padding:0}body{background:white}}
+
+.study-shortcuts{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}.study-shortcuts button{font-size:13px;flex:1 1 180px}.provenance-note{padding:0 0 15px}.sample-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line)}.sample-row span{font-size:13px}.sample-row b,.sample-row small{display:block;font-size:11px;color:var(--muted)}.sample-row .text-button{flex-shrink:0}.source-note{margin-top:10px}
