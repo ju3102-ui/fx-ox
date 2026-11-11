@@ -4587,7 +4587,7 @@ window.FX_DATA = {
       "subject": 1,
       "number": 6,
       "title": "위규사례",
-      "focus": "신고 누락·분할 거래·직원의 확인",
+      "focus": "자진신고·거래목적 위장·허위 장부",
       "ids": [
         282,
         283,
